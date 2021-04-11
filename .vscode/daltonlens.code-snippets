@@ -1,0 +1,23 @@
+{
+	"Python method docstring": {
+		"prefix": "fundoc",
+		"body": [
+			"    \"\"\"Function short description.",
+			"",
+			"    Function long description",
+			"    Can be multiline",
+			"",
+			"    Parameters",
+			"    ==========",
+			"    param1 : float",
+			"        The param 1",
+			"",
+			"    Returns",
+			"    =======",
+			"    value : float",
+			"        The output value",
+			"    \"\"\""
+		],
+		"description": ""
+	}
+}
