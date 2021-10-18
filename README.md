@@ -19,7 +19,10 @@ This python package is a companion to the desktop application [DaltonLens](https
 
 ```
 daltonlens-python --help
-usage: daltonlens-python [-h] [--model MODEL] [--filter FILTER] [--deficiency DEFICIENCY] [--severity SEVERITY] input_image output_image
+usage: daltonlens-python [-h] 
+       [--model MODEL] [--filter FILTER]
+       [--deficiency DEFICIENCY] [--severity SEVERITY]
+       input_image output_image
 
 Toolbox to simulate and filter color vision deficiencies.
 
