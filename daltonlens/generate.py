@@ -1,4 +1,6 @@
+from collections import namedtuple
 import itertools
+
 import numpy as np
 from pathlib import Path
 import sys
@@ -86,28 +88,16 @@ def ishihara_image(fg_color, bg_color, mask):
         cv2.circle(im, (int(cx),int(cy)), int(r), color, -1, cv2.LINE_AA)
     return im
 
-def ishihara_plate(deficiency: simulate.Deficiency, 
-                   severity: float = 1.0, 
-                   label: str = None,
-                   lms_model: convert.LMSModel = convert.LMSModel_sRGB_SmithPokorny75()):
+def ishihara_plate_dichromacy(deficiency: simulate.Deficiency, 
+                              label: str = None,
+                              lms_model: convert.LMSModel = convert.LMSModel_sRGB_SmithPokorny75()):
     """Generate an image "plate" with several Ishihara-like images on in.
 
-    The algorithm samples colors in the LMS space and generate confusion lines for it.
-    Then for each line, it picks two colors on it, with a distance depending on the
-    severity, and generates an Ishihara-like circle image with one color as the
-    foreground (a number) and the other one as the background. This allows to quickly
-    evaluate the CVD kind and the severity, by checking on which plate the numbers get
-    harder to read.
-
-    Parameters
-    ==========
-    param1 : float
-        The param 1
-
-    Returns
-    =======
-    value : float
-        The output value
+    The algorithm samples colors in the LMS space and generate confusion lines
+    for it. Then for each line, it picks the two extreme colors on it and
+    generates an Ishihara-like circle image with one color as the foreground (a
+    number) and the other one as the background. This allows to evaluate the CVD
+    kind, by checking on which plate the numbers get harder to read, if any.
     """
     try: import cv2
     except ImportError:
@@ -145,8 +135,6 @@ def ishihara_plate(deficiency: simulate.Deficiency,
         # ****||**** -> severity of 0,   LMS distance between the points = 0
         norm = np.linalg.norm(p2-p1)
         d = geometry.normalized(p2-p1)
-        p1 = p1 + (1.0-severity)*0.5*d*norm
-        p2 = p2 - (1.0-severity)*0.5*d*norm
         dist = np.linalg.norm(p2-p1)
         srgb_1,srgb_2 = convert.sRGB_from_linearRGB(convert.apply_color_matrix(np.array([p1, p2]), lms_model.linearRGB_from_LMS))
         # Leave 0 and 4 out, we don't have nice masks for them
@@ -173,3 +161,156 @@ def ishihara_plate(deficiency: simulate.Deficiency,
         plate_image = np.vstack([text_im, plate_image])
 
     return plate_image
+
+def simulator_ishihara_plate(simulator: simulate.Simulator,
+                             deficiency: simulate.Deficiency, 
+                             severity: float = 1.0,
+                             label: str = None,
+                             lms_model: convert.LMSModel = convert.LMSModel_sRGB_SmithPokorny75()):
+    """Generate an image "plate" with several Ishihara-like images on in.
+
+    This version can handle various severities and evaluate a specific
+    simulator. It works by first applying the CVD simulation of all the possible
+    RGB values. Then for a set of reference colors, it checks what are the most
+    different color that projected to the same color after applying the
+    simulation. Then it uses these most different color pairs to generate some
+    Ishihara-like images. The severity of the observer is given by the first
+    value where he can't read any number. The kind of CVD is given by the
+    deficiency where the severity is highest.
+
+    For example, someone who:
+        - Cannot see any number with PROTAN and severity < 0.5
+        - Cannot see any number with DEUTAN and severity < 0.7
+        - Cannot see any number with TRITAN and severity < 0.1
+    is probably a mild-deutan according to that simulator, with severity 0.7.
+    """
+    try: import cv2
+    except ImportError:
+        sys.stderr.write("OpenCV is required for ishihara_image: `pip install opencv-python'\n")
+        return None
+
+    try: import colour
+    except ImportError:
+        sys.stderr.write("colour is required for simulator_ishihara_plate: `pip install colour-science'\n")
+        return None
+
+    from daltonlens import geometry
+
+    mask_images_path = Path(__file__).parent.absolute() / "data"
+    assert mask_images_path.exists()
+
+    width = 256
+    height = 256
+
+    # Sample the entire linear RGB color space, but with only 64 values per axis instead of 256
+    # This is enough to evaluate the algorithm and runs much faster.
+    num_steps = 64
+    same_color_threshold = 6.0 / 256.0
+    axis_values = np.linspace(0.0, 1.0, num_steps)
+    mesh = np.meshgrid(axis_values, axis_values, axis_values)
+    grid = np.stack(mesh, axis=-1).astype(float)
+    # grid.shape is (64,64,64,3): a volume with one color per cell, covering the entire RGB gamut.
+    
+    # Compute a set of reference colors to test. Basically 0.1 or 0.9 for each channel.
+    per_axis_seed = [0.2, 0.8]
+    rgb_refs = []
+    for r,g,b in itertools.product(per_axis_seed, per_axis_seed, per_axis_seed):
+        rgb_refs.append(grid[int(r*num_steps), int(g*num_steps), int(b*num_steps)])
+    rgb_refs = np.array(rgb_refs)
+    rgb_refs_cvd = simulator._simulate_cvd_linear_rgb(rgb_refs.reshape(1,-1,3), deficiency, severity=severity).reshape(-1,3)
+
+    grid = grid.reshape((grid.shape[0], -1, 3))
+    # grid is now a 2D RGB image with shape (64, 64x64=4096, 3)
+    grid_cvd = simulator._simulate_cvd_linear_rgb(grid, deficiency, severity=severity)
+    np.set_printoptions(precision=3, suppress=True)
+
+    # Now switch to 1D, we don't care about having an image.
+    grid_cvd = grid_cvd.reshape(-1, 3)
+    grid = grid.reshape(-1, 3)
+
+    linearRGB_to_Lab = lambda im_rgb: colour.XYZ_to_Lab(colour.sRGB_to_XYZ(im_rgb, apply_cctf_decoding=False))
+
+    # Manage a subset of colors in the grid.
+    ColorSubset = namedtuple('ColorSubset', ['orig_rgb', 'orig_lab', 'cvd_rgb', 'cvd_lab'])
+    def filterSubset (subset: ColorSubset, indices):
+        orig_rgb = subset.orig_rgb[indices]
+        cvd_rgb = subset.cvd_rgb[indices]
+        orig_lab = subset.orig_lab[indices] if subset.orig_lab is not None else None
+        cvd_lab = subset.cvd_lab[indices] if subset.cvd_lab is not None else None
+        return ColorSubset(orig_rgb, orig_lab, cvd_rgb, cvd_lab)
+
+    colorPairs = []
+
+    for rgb_ref, rgb_ref_cvd in zip(rgb_refs, rgb_refs_cvd):
+        ref_lab = linearRGB_to_Lab(rgb_ref)
+        ref_cvd_lab = linearRGB_to_Lab(rgb_ref_cvd)
+
+        # Perceptual distance between the simulated colour and the original one.
+        # This will typically have the largest distance when the severity is
+        # low.
+        dE_refRgb_refCvd = colour.delta_E(ref_lab, ref_cvd_lab)
+
+        current_set = ColorSubset (grid, None, grid_cvd, None)
+
+        # We also need to check if two colors that used to be different now fall
+        # on the same color. This will typically happen with full severity, when
+        # two colors on each side of the projection plane collapse to a single
+        # location on the plane. This makes an even bigger difference than the
+        # simulated color vs original color.
+        diff_abs = np.abs(current_set.cvd_rgb - rgb_ref_cvd)
+        max_diff = np.max(diff_abs, axis=-1)
+        indices = max_diff < same_color_threshold
+        current_set = filterSubset(current_set, indices)
+        
+        orig_rgb = grid[indices]
+        cvd_rgb = grid_cvd[indices]
+        current_set = current_set._replace(orig_lab=linearRGB_to_Lab(current_set.orig_rgb))
+        current_set = current_set._replace(cvd_lab=linearRGB_to_Lab(current_set.cvd_rgb))
+
+        # Now we know that all these colors are similar once transformed with CVD.
+        dE_refCvd_cvd = colour.delta_E(ref_cvd_lab, current_set.cvd_lab)
+        refined_indices = dE_refCvd_cvd < 1.0
+        current_set = filterSubset(current_set, refined_indices)
+
+        dE_refRgb_orig = colour.delta_E(ref_lab, current_set.orig_lab)
+        indices_that_changed = dE_refRgb_orig > 2.0
+        current_set = filterSubset(current_set, indices_that_changed)
+        dE_refRgb_orig = dE_refRgb_orig[indices_that_changed]
+        
+        # Pick the color pair that is the most different between all the source
+        # colors that project to this CVD simulated colors.
+        if dE_refRgb_orig.size == 0 or dE_refRgb_refCvd > np.max(dE_refRgb_orig):
+            colorPairs.append((rgb_ref, rgb_ref_cvd, dE_refRgb_refCvd))
+        else:
+            k = np.argmax(dE_refRgb_orig)
+            colorPairs.append((rgb_ref, current_set.orig_rgb[k], dE_refRgb_orig[k]))
+
+    # Keep the top N pairs.
+    colorPairs = sorted(colorPairs, key=lambda cp: -cp[2])
+    colorPairs = colorPairs[0:3]
+    images = []
+    random.seed()
+    for cp in colorPairs:
+        # Don't try to render images where the distance is too low.
+        # Theoretically the just noticeable distance is 1, but we take a margin
+        # to avoid tests that are too hard even for a normal observer.
+        if cp[2] < 2.0:
+            im = np.full((height, width, 3), 127, dtype=np.uint8)
+        else:
+            n = random.choice([1,2,3, 5,6,7,8,9])
+            mask_file = str(mask_images_path / "mask") + f"_{n}.png"
+            mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE) if n > 0 else np.zeros((256,256,1))
+            if mask is None:
+                print(f"ERROR: could not load the mask from {mask_file}, does the file exist?")
+                return None
+            srgb0,srgb1 = convert.sRGB_from_linearRGB(np.array([cp[0], cp[1]]))
+            im = ishihara_image(srgb0*255.0, srgb1*255.0, mask)
+            im = cv2.resize(im, (width,height))
+        images.append(im)
+    
+    im = np.hstack(images)
+    if label:
+        text_im = np.zeros((64, im.shape[1], 3), dtype=np.uint8)
+        cv2.putText(text_im, label, (16,32), cv2.FONT_HERSHEY_COMPLEX, 0.7, (220,220,220), 1, cv2.LINE_AA)
+        im = np.vstack([text_im, im])
+    return im

@@ -20,5 +20,5 @@ jobs:
     - name: Run the unit tests
       run: |
         tests/test_simulate.py
-        pip install Geometry3D opencv-python
+        pip install Geometry3D opencv-python colour-science
         tests/test_generate.py
