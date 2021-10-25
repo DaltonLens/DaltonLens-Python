@@ -40,6 +40,7 @@ deficiency_from_str = {
 simulator_from_str = {
     'vienot': simulate.Simulator_Vienot1999(convert.LMSModel_sRGB_SmithPokorny75()),
     'brettel': simulate.Simulator_Brettel1997(convert.LMSModel_sRGB_SmithPokorny75()),
+    'vischeck': simulate.Simulator_Vischeck(),
     'machado': simulate.Simulator_Machado2009(),
     'auto': simulate.Simulator_AutoSelect()
 }

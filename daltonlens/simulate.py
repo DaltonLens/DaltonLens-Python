@@ -144,46 +144,87 @@ class Simulator_Vienot1999 (DichromacySimulator):
         return convert.apply_color_matrix(image_linear_rgb_float32, cvd_linear_rgb)
 
 class Simulator_Brettel1997 (DichromacySimulator):
-    """Algorithm of (Brettel & Mollon, 1997).
-
+    """Algorithm of (Brettel, Viénot & Mollon, 1997).
     'Computerized simulation of color appearance for dichromats'
 
     This model is a bit more complex than (Viénot & Brettel & Mollon, 1999)
     but it works well for tritanopia. It is also the most solid reference
-    in the litterature.
+    in the literature.
     """
 
-    def __init__(self, color_model: convert.LMSModel = convert.LMSModel_sRGB_SmithPokorny75()):
+    def __init__(self, 
+                 color_model: convert.LMSModel = convert.LMSModel_sRGB_SmithPokorny75(),
+                 use_vischeck_anchors=False,
+                 use_white_as_neutral=True):
+        """    
+        Parameters
+        ==========
+        use_vischeck_anchors : Boolean
+            If true, the 475, 575, 485 and 660nm
+            anchors will be taken from Vischeck. Not sure how they were computed
+            exactly, but this option is useful to have a comparison point with
+            the battle-tested Vischeck.
+
+        use_white_as_neutral: Boolean If true, RGB white will be used as the
+            white point and will be the diagonal of the projection plane. In
+            theory we should pick an equal illuminant (X=Y=Z in XYZ), but
+            picking white is a reasonable approximation that increases the valid
+            gamut. Indeed, using E means that more colors will get projected
+            on the plane outside of the LMS parallelepiped and thus get clamped.
+
+            Also pure RGB white (255,255,255) will not be left unchanged if we
+            use the equal energy illuminant, which is a bit annoying.
+
+            This is also the approximation made by Viénot, Brettel & Mollon 1999 
+            'Digital video colourmaps for checking the legibility of displays by dichromats.'
+        """
+        self.use_vischeck_anchors = use_vischeck_anchors
         self.color_model = color_model
+        self.use_white_as_neutral = use_white_as_neutral
 
     def _simulate_dichromacy_linear_rgb (self, image_linear_rgb_float32, deficiency: Deficiency):
-        # This is how these were computed. Saving the values to avoid a dependency.
-        # import colour # from pip install colour-science
-        # from colour import MSDS_CMFS
-        # cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
-        # xyz_475 = colour.wavelength_to_XYZ(475, cmfs)
-        # xyz_575 = colour.wavelength_to_XYZ(575, cmfs)
-        # xyz_485 = colour.wavelength_to_XYZ(485, cmfs)
-        # xyz_660 = colour.wavelength_to_XYZ(660, cmfs)
+        if self.use_vischeck_anchors:
+            # From GIMP vischeck implementation. They define them in lms, but
+            # we converted them to XYZ using their lms2rgb matrix and XYZ_from_rgb
+            # https://github.com/GNOME/gimp/blob/master/modules/display-filter-color-blind.c
+            # lms_475 = np.array([0.08008, 0.1579, 0.5897])
+            # lms_575 = np.array([0.9856, 0.7325, 0.001079])
+            # lms_485 = np.array([0.1284, 0.2237, 0.3636])
+            # lms_660 = np.array([0.0914, 0.007009, 0.0])
+            xyz_475 = np.array([ 1.22694,  0.87814,  7.85903])
+            xyz_575 = np.array([ 5.65322,  6.43625, -0.2219 ])
+            xyz_485 = np.array([ 0.79132,  1.4793 ,  4.85354])
+            xyz_660 = np.array([ 0.90089,  0.21688, -0.04599])
+        else:
+            # This is how these were computed. Saving the values to avoid a dependency.
+            # import colour # from pip install colour-science
+            # from colour import MSDS_CMFS
+            # cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
+            # xyz_475 = colour.wavelength_to_XYZ(475, cmfs)
+            # xyz_575 = colour.wavelength_to_XYZ(575, cmfs)
+            # xyz_485 = colour.wavelength_to_XYZ(485, cmfs)
+            # xyz_660 = colour.wavelength_to_XYZ(660, cmfs)
+            xyz_475 = np.array([ 0.1421,  0.1126,  1.0419])
+            xyz_575 = np.array([ 0.8425,  0.9154,  0.0018])
+            xyz_485 = np.array([ 0.05795, 0.1693,  0.6162])
+            xyz_660 = np.array([ 0.1649,  0.0610,  0.0000])
 
-        xyz_475 = np.array([ 0.1421,  0.1126,  1.0419])
-        xyz_575 = np.array([ 0.8425,  0.9154,  0.0018])
-        xyz_485 = np.array([ 0.05795, 0.1693,  0.6162])
-        xyz_660 = np.array([ 0.1649,  0.0610,  0.0000])
+        # The equal-energy white point. By construction of CIE XYZ it has X=Y=Z.
+        # The normalization does not matter to define the diagonal direction,
+        # picking 0.8 to make it close to sRGB white.
+        if self.use_white_as_neutral:
+            lms_W = self.color_model.LMS_from_linearRGB @ np.array([1.0,1.0,1.0])
+            lms_neutral = lms_W
+        else:
+            xyz_E = [0.8, 0.8, 0.8]
+            rgb_E = self.color_model.linearRGB_from_XYZ @ xyz_E
+            lms_E = self.color_model.LMS_from_XYZ @ xyz_E
+            lms_neutral = lms_E
 
-        # The equal-energy white point. By construction of CIE XYZ
-        # it has X=Y=Z. The normalization does not matter to define
-        # the diagonal direction, picking 0.8 to make it close to
-        # sRGB white.
-        xyz_E = [0.8, 0.8, 0.8]
-        rgb_E = self.color_model.linearRGB_from_XYZ @ xyz_E
-        lms_E = self.color_model.LMS_from_XYZ @ xyz_E
-        # lms_W = self.color_model.LMS_from_linearRGB @ np.array([1.0,1.0,1.0])
-
-        def compute_matrices(lms_E, lms_on_wing1, lms_on_wing2):
-            n1 = np.cross(lms_E, lms_on_wing1) # first plane
-            n2 = np.cross(lms_E, lms_on_wing2) # second plane
-            n_sep_plane = np.cross(lms_E, lms_confusion_axis(deficiency)) # separation plane going through the diagonal
+        def compute_matrices(lms_on_wing1, lms_on_wing2):
+            n1 = np.cross(lms_neutral, lms_on_wing1) # first plane
+            n2 = np.cross(lms_neutral, lms_on_wing2) # second plane
+            n_sep_plane = np.cross(lms_neutral, lms_confusion_axis(deficiency)) # separation plane going through the diagonal
             # Swap the input so that wing1 is on the positive side of the separation plane
             if np.dot(n_sep_plane, lms_on_wing1) < 0:
                 n1, n2 = n2, n1
@@ -196,11 +237,11 @@ class Simulator_Brettel1997 (DichromacySimulator):
         if deficiency == Deficiency.PROTAN or deficiency == Deficiency.DEUTAN:
             lms_475 = self.color_model.LMS_from_XYZ @ xyz_475
             lms_575 = self.color_model.LMS_from_XYZ @ xyz_575
-            H1, H2, n_sep_plane = compute_matrices(lms_E, lms_475, lms_575)
+            H1, H2, n_sep_plane = compute_matrices(lms_475, lms_575)
         else:
             lms_485 = self.color_model.LMS_from_XYZ @ xyz_485
             lms_660 = self.color_model.LMS_from_XYZ @ xyz_660
-            H1, H2, n_sep_plane = compute_matrices(lms_E, lms_485, lms_660)
+            H1, H2, n_sep_plane = compute_matrices(lms_485, lms_660)
 
         im_lms = convert.apply_color_matrix(image_linear_rgb_float32, self.color_model.LMS_from_linearRGB)
         im_H1 = convert.apply_color_matrix(im_lms, H1)
@@ -212,6 +253,19 @@ class Simulator_Brettel1997 (DichromacySimulator):
         im_H[H2_indices] = im_H2[H2_indices]
         im_linear_rgb = convert.apply_color_matrix(im_H, self.color_model.linearRGB_from_LMS)
         return im_linear_rgb
+
+class Simulator_Vischeck (Simulator_Brettel1997):
+    """Emulates Vischeck, as implemented in GIMP.
+
+    The Vischeck code is based on Brettel. The main differences are:
+    - The LMS model being used
+    - The anchor points (the 475 / 485 / 575 / 660nm wavelength)
+    - Using RGB white as the neutral instead of an equal energy illuminant in XYZ
+    """
+    def __init__(self):
+        super().__init__(convert.LMSModel_Vischeck_GIMP(),
+                         use_vischeck_anchors=True,
+                         use_white_as_neutral=True)
 
 """
 From https://www.inf.ufrgs.br/~oliveira/pubs_files/CVD_Simulation/CVD_Simulation.html#Reference

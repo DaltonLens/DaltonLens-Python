@@ -142,6 +142,54 @@ LMS_from_XYZ_Smith_Pokorny_1975 = np.array([
         [-0.15514, 0.45684,  0.03286],
         [ 0      , 0      ,  0.01608]])
 
+# Matrix for the sRGB standard
+XYZ_from_linearRGB_BT709 = np.array([
+        [0.412456, 0.3575761, 0.1804375],
+        [0.212672, 0.7151522, 0.0721750],
+        [0.019333, 0.1191920, 0.9503041]])
+
+# We can safely normalize the rows of the transform without changing the output
+# of any simulation as the angle between the axes are still similar and the
+# inverse scaling will be applied when going back to XYZ/RGB.
+# This can be useful to compare the matrices.
+def normalize_LMS_from_XYZ(lms_from_XYZ):
+    output = np.copy(lms_from_XYZ)
+    output[0,:] = output[0,:] / np.linalg.norm(output[0,:])
+    output[1,:] = output[1,:] / np.linalg.norm(output[1,:])
+    output[2,:] = output[2,:] / np.linalg.norm(output[2,:])
+    return output
+class LMSModel_Vischeck_GIMP (LMSModel):
+    """LMS model of Vischeck, as implemented in GIMP display filters.
+
+     These LMS_from_linearRGB / linearRGB_from_LMS were taken from
+     https://github.com/GNOME/gimp/blob/master/modules/display-filter-color-blind.c
+
+     The comments say that these matrices were computed for CRT monitors with a
+     spectral photometric and the Stockman human cone fundamentals and that they
+     should not be used for LCD monitors. So these are probably not the best
+     anymore given that CRT monitors are gone and modern monitors adopted the
+     sRGB standard. But having this model is useful to use the Vischeck model as
+     a reference.
+    """
+
+    vischeck_LMS_from_linearRGB = np.array([[0.05059983, 0.08585369, 0.00952420],
+                                            [0.01893033, 0.08925308, 0.01370054],
+                                            [0.00292202, 0.00975732, 0.07145979]])
+
+    vischeck_linearRGB_from_LMS = np.array([[30.830854, -29.832659, 1.610474],
+                                            [-6.481468, 17.715578, -2.532642],
+                                            [-0.375690, -1.199062, 14.273846]])
+
+    # For sRGB. It does not really matter though, since we directly provide the
+    # final LMS_from_linearRGB. It's just used to compute the same set of
+    # intermediate matrices as the other models.
+    XYZ_from_linearRGB = XYZ_from_linearRGB_BT709
+
+    LMS_from_XYZ = vischeck_LMS_from_linearRGB @ np.linalg.inv(XYZ_from_linearRGB)
+
+    def __init__(self):
+        super().__init__(self.XYZ_from_linearRGB, self.LMS_from_XYZ)
+
 class LMSModel_sRGB_SmithPokorny75 (LMSModel):
     """LMS model of (Smith & Pokorny, 1975), adapted to SRGB monitors.
 
@@ -152,10 +200,7 @@ class LMSModel_sRGB_SmithPokorny75 (LMSModel):
 
     This model is recommended for CVD simulation.
     """
-    XYZ_from_linearRGB = np.array([
-        [0.412456, 0.3575761, 0.1804375],
-        [0.212672, 0.7151522, 0.0721750],
-        [0.019333, 0.1191920, 0.9503041]])
+    XYZ_from_linearRGB = XYZ_from_linearRGB_BT709
 
     # Vienot took this from [Smith, 1975], clarified in [Smith, 2003]
     LMS_from_XYZ = LMS_from_XYZ_Smith_Pokorny_1975
@@ -228,10 +273,7 @@ class LMSModel_sRGB_HuntPointerEstevez (LMSModel):
     """
 
     # Taken from the sRGB spec from https://en.wikipedia.org/wiki/SRGB
-    XYZ_from_linearRGB = np.array([
-        [0.412456, 0.3575761, 0.1804375],
-        [0.212672, 0.7151522, 0.0721750],
-        [0.019333, 0.1191920, 0.9503041]])
+    XYZ_from_linearRGB = XYZ_from_linearRGB_BT709
 
     # From Wikipedia https://en.wikipedia.org/wiki/LMS_color_space
     # Hunt-Pointer-Esterez is older and supposedly worse than e.g. Bradford
@@ -269,10 +311,7 @@ class LMSModel_sRGB_MCAT02 (LMSModel):
     """
 
     # Taken from the sRGB spec from https://en.wikipedia.org/wiki/SRGB
-    XYZ_from_linearRGB = np.array([
-        [0.412456, 0.3575761, 0.1804375],
-        [0.212672, 0.7151522, 0.0721750],
-        [0.019333, 0.1191920, 0.9503041]])
+    XYZ_from_linearRGB = XYZ_from_linearRGB_BT709
 
     LMS_from_XYZ = np.array([
         [0.7328, 0.4296, -0.1624],
@@ -296,10 +335,7 @@ class LMSModel_sRGB_StockmanSharpe2000 (LMSModel):
     """
 
     # Taken from the sRGB spec from https://en.wikipedia.org/wiki/SRGB
-    XYZ_from_linearRGB = np.array([
-        [0.412456, 0.3575761, 0.1804375],
-        [0.212672, 0.7151522, 0.0721750],
-        [0.019333, 0.1191920, 0.9503041]])
+    XYZ_from_linearRGB = XYZ_from_linearRGB_BT709
 
     LMS_from_XYZ = np.array([
         [1.94735469, -1.41445123, 0.36476327],
