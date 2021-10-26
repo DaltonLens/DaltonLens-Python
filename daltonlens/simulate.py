@@ -144,7 +144,7 @@ class Simulator_Vienot1999 (DichromacySimulator):
             n = np.cross(v_yellow, v_blue)
             lms_projection_matrix = plane_projection_matrix(n, deficiency)
         else:
-            print ("WARNING: Viénot 1999 is not accurate for tritanopia. Use Brettel 1997 instead.")
+            # print ("WARNING: Viénot 1999 is not accurate for tritanopia. Use Brettel 1997 instead.")
             v_red = self.color_model.LMS_from_linearRGB @ np.array([1.0, 0.0, 0.0]) # - lms_black which is ommitted since it's zero
             v_cyan = self.color_model.LMS_from_linearRGB @ np.array([0.0, 1.0, 1.0]) # - lms_black which is ommitted since it's zero
             n = np.cross(v_cyan, v_red)
@@ -300,7 +300,7 @@ struct DLBrettel1997Params
 static struct DLBrettel1997Params brettel_{deficiency_name}_params = {{
     {lmsElementToProject}, // only this LMS coordinate is affected for {deficiency_name}
     {{ {H1_row[0]:.5f}, {H1_row[1]:.5f}, {H1_row[2]:.5f} }}, // Projection to plane 1
-    {{ {H1_row[0]:.5f}, {H2_row[1]:.5f}, {H2_row[2]:.5f} }}, // Projection to plane 2
+    {{ {H2_row[0]:.5f}, {H2_row[1]:.5f}, {H2_row[2]:.5f} }}, // Projection to plane 2
     {{ {n_sep_plane[0]:.5f}, {n_sep_plane[1]:.5f}, {n_sep_plane[2]:.5f} }}  // Normal of the separation plane to pick the projection plane.
 }};""")
 
