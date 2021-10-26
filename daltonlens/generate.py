@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import random
 
-from daltonlens import convert, simulate
+from daltonlens import convert, simulate, utils
 
 def rgb_span(width, height):
     """Generate an image that spans the full RGB range.
@@ -134,7 +134,7 @@ def ishihara_plate_dichromacy(deficiency: simulate.Deficiency,
         # **|****|** -> severity of 0.5, LMS distance between the points = 4
         # ****||**** -> severity of 0,   LMS distance between the points = 0
         norm = np.linalg.norm(p2-p1)
-        d = geometry.normalized(p2-p1)
+        d = utils.normalized(p2-p1)
         dist = np.linalg.norm(p2-p1)
         srgb_1,srgb_2 = convert.sRGB_from_linearRGB(convert.apply_color_matrix(np.array([p1, p2]), lms_model.linearRGB_from_LMS))
         # Leave 0 and 4 out, we don't have nice masks for them

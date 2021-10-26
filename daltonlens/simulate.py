@@ -1,4 +1,6 @@
 from daltonlens import convert
+from daltonlens.utils import array_to_C_decl
+
 from collections import namedtuple
 
 import math
@@ -13,11 +15,18 @@ class Deficiency(Enum):
     DEUTAN = 1
     TRITAN = 2
 
+def name_of_deficiency(d: Deficiency):
+    if d == Deficiency.PROTAN: return "protan"
+    if d == Deficiency.DEUTAN: return "deutan"
+    if d == Deficiency.TRITAN: return "tritan"
 class Simulator (ABC):
     """Base class for all CVD simulators."""
 
+    def __init__(self):
+        self.dumpPrecomputedValues = False
+
     def simulate_cvd (self, image_srgb_uint8, deficiency: Deficiency, severity: float):
-        """Simulate the appearance of an image for the given color vision defiency
+        """Simulate the appearance of an image for the given color vision deficiency
     
         Parameters
         ==========
@@ -120,6 +129,7 @@ class Simulator_Vienot1999 (DichromacySimulator):
     """
 
     def __init__(self, color_model: convert.LMSModel = convert.LMSModel_sRGB_SmithPokorny75()):
+        super().__init__()
         self.color_model = color_model
 
     def _simulate_dichromacy_linear_rgb (self, image_linear_rgb_float32, deficiency: Deficiency):
@@ -141,7 +151,11 @@ class Simulator_Vienot1999 (DichromacySimulator):
             lms_projection_matrix = plane_projection_matrix(n, Deficiency.TRITAN)
 
         cvd_linear_rgb = self.color_model.linearRGB_from_LMS @ lms_projection_matrix @ self.color_model.LMS_from_linearRGB
-        return convert.apply_color_matrix(image_linear_rgb_float32, cvd_linear_rgb)
+
+        if self.dumpPrecomputedValues:
+            print (array_to_C_decl(f"vienot_{name_of_deficiency(deficiency)}_rgbCvd_from_rgb", cvd_linear_rgb))
+
+        return convert.apply_color_matrix(image_linear_rgb_float32, cvd_linear_rgb)    
 
 class Simulator_Brettel1997 (DichromacySimulator):
     """Algorithm of (Brettel, Viénot & Mollon, 1997).
@@ -178,6 +192,8 @@ class Simulator_Brettel1997 (DichromacySimulator):
             This is also the approximation made by Viénot, Brettel & Mollon 1999 
             'Digital video colourmaps for checking the legibility of displays by dichromats.'
         """
+        
+        super().__init__()
         self.use_vischeck_anchors = use_vischeck_anchors
         self.color_model = color_model
         self.use_white_as_neutral = use_white_as_neutral
@@ -243,6 +259,9 @@ class Simulator_Brettel1997 (DichromacySimulator):
             lms_660 = self.color_model.LMS_from_XYZ @ xyz_660
             H1, H2, n_sep_plane = compute_matrices(lms_485, lms_660)
 
+        if self.dumpPrecomputedValues:            
+            self._dump_brettel_data (deficiency, H1, H2, n_sep_plane)
+
         im_lms = convert.apply_color_matrix(image_linear_rgb_float32, self.color_model.LMS_from_linearRGB)
         im_H1 = convert.apply_color_matrix(im_lms, H1)
         im_H2 = convert.apply_color_matrix(im_lms, H2)
@@ -253,6 +272,37 @@ class Simulator_Brettel1997 (DichromacySimulator):
         im_H[H2_indices] = im_H2[H2_indices]
         im_linear_rgb = convert.apply_color_matrix(im_H, self.color_model.linearRGB_from_LMS)
         return im_linear_rgb
+
+    def _dump_brettel_data(self, deficiency, H1, H2, n_sep_plane):
+        deficiency_name = name_of_deficiency(deficiency)
+        print(array_to_C_decl("LMS_from_linearRGB", self.color_model.LMS_from_linearRGB))
+        print()
+        print(array_to_C_decl("linearRGB_from_LMS", self.color_model.linearRGB_from_LMS))
+        print ("""
+struct DLBrettel1997Params
+{
+    int lmsElementToProject;
+    float projectionOnPlane1[3];
+    float projectionOnPlane2[3];
+    float separationPlaneNormal[3];
+};""")
+            
+        lmsElementForDeficiency = {
+            Deficiency.PROTAN: 0,
+            Deficiency.DEUTAN: 1,
+            Deficiency.TRITAN: 2,
+        }
+        lmsElementToProject = lmsElementForDeficiency[deficiency]
+        H1_row = H1[lmsElementToProject]
+        H2_row = H2[lmsElementToProject]
+
+        print (f"""
+static struct DLBrettel1997Params brettel_{deficiency_name}_params = {{
+    {lmsElementToProject}, // only this LMS coordinate is affected for {deficiency_name}
+    {{ {H1_row[0]:.5f}, {H1_row[1]:.5f}, {H1_row[2]:.5f} }}, // Projection to plane 1
+    {{ {H1_row[0]:.5f}, {H2_row[1]:.5f}, {H2_row[2]:.5f} }}, // Projection to plane 2
+    {{ {n_sep_plane[0]:.5f}, {n_sep_plane[1]:.5f}, {n_sep_plane[2]:.5f} }}  // Normal of the separation plane to pick the projection plane.
+}};""")
 
 class Simulator_Vischeck (Simulator_Brettel1997):
     """Emulates Vischeck, as implemented in GIMP.

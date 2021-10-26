@@ -11,7 +11,6 @@ except ImportError as e:
 def geo3dPoint_from_np(p): return geo3d.Point(p[0], p[1], p[2])
 def geo3dVector_from_np(p): return geo3d.Vector(p[0], p[1], p[2])
 def np_from_geo3dPoint(p): return np.array([p.x, p.y, p.z])
-def normalized(p): return p / np.linalg.norm(p)
 
 def lms_confusion_segment(lms_color, color_model: convert.LMSModel, deficiency: simulate.Deficiency):
     """Return the endpoints of the confusion line passing by the given LMS point.
