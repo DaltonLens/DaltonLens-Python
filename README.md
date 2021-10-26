@@ -9,6 +9,12 @@ This python package is a companion to the desktop application [DaltonLens](https
 * Implement several variants of the LMS model
 * Generate Ishihara-like test images
 
+For a discussion about which CVD simulation algorithms are the most accurate see our [Review of Open Source Color Blindness Simulations](https://daltonlens.org/opensource-cvd-simulation/).
+
+For more information about the math of the chosen algorithms see our article [Understanding CVD Simulation](https://daltonlens.org/understanding-cvd-simulation/).
+
+It is part of the [daltonlens.org](https://daltonlens.org) effort.
+
 ## Install
 
 `python3 -m pip install daltonlens`
