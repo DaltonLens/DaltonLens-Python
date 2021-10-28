@@ -2,7 +2,7 @@
 
 [![Unit Tests](https://github.com/DaltonLens/DaltonLens-Python/actions/workflows/unit_tests.yml/badge.svg)](https://github.com/DaltonLens/DaltonLens-Python/actions/workflows/unit_tests.yml)
 
-This python package is a companion to the desktop application [DaltonLens](https://github.com/DaltonLens/DaltonLens). Its main goal is to help the research and development of better color filters for people with color vision deficiencies. The current features include:
+This python package is a companion to the desktop application [DaltonLens](https://github.com/DaltonLens/DaltonLens). Its main goal is to help the research and development of better color filters for people with color vision deficiencies. It also powers the Jupyter notebooks used for the technical posts of [daltonlens.org](https://daltonlens.org). The current features include:
 
 * Simulate color vision deficiencies using the Viénot 1999, Brettel 1997 or Machado 2009 models.
 * Provide conversion functions to/from sRGB, linear RGB and LMS
@@ -12,8 +12,6 @@ This python package is a companion to the desktop application [DaltonLens](https
 For a discussion about which CVD simulation algorithms are the most accurate see our [Review of Open Source Color Blindness Simulations](https://daltonlens.org/opensource-cvd-simulation/).
 
 For more information about the math of the chosen algorithms see our article [Understanding CVD Simulation](https://daltonlens.org/understanding-cvd-simulation/).
-
-It is part of the [daltonlens.org](https://daltonlens.org) effort.
 
 ## Install
 
