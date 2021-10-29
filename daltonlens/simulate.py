@@ -150,12 +150,13 @@ class Simulator_Vienot1999 (DichromacySimulator):
             n = np.cross(v_cyan, v_red)
             lms_projection_matrix = plane_projection_matrix(n, Deficiency.TRITAN)
 
-        cvd_linear_rgb = self.color_model.linearRGB_from_LMS @ lms_projection_matrix @ self.color_model.LMS_from_linearRGB
+        # Save it for external inspection.
+        self.cvd_linear_rgb = self.color_model.linearRGB_from_LMS @ lms_projection_matrix @ self.color_model.LMS_from_linearRGB
 
         if self.dumpPrecomputedValues:
-            print (array_to_C_decl(f"vienot_{name_of_deficiency(deficiency)}_rgbCvd_from_rgb", cvd_linear_rgb))
+            print (array_to_C_decl(f"vienot_{name_of_deficiency(deficiency)}_rgbCvd_from_rgb", self.cvd_linear_rgb))
 
-        return convert.apply_color_matrix(image_linear_rgb_float32, cvd_linear_rgb)    
+        return convert.apply_color_matrix(image_linear_rgb_float32, self.cvd_linear_rgb)
 
 class Simulator_Brettel1997 (DichromacySimulator):
     """Algorithm of (Brettel, Viénot & Mollon, 1997).
