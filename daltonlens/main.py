@@ -17,7 +17,7 @@ def parse_command_line():
     parser.add_argument("output_image", type=Path, help="Output image")
  
     parser.add_argument("--model", "-m", type=str, default="auto",
-                        help="Color model to apply: vienot, brettel, machado or auto")
+                        help="Color model to apply: auto, vienot, brettel, machado, vischeck, coblisV1, coblisV2")
 
     parser.add_argument("--filter", "-f", type=str, default="simulate",
                         help="Filter to apply: simulate or daltonize.")
@@ -42,6 +42,8 @@ simulator_from_str = {
     'brettel': simulate.Simulator_Brettel1997(convert.LMSModel_sRGB_SmithPokorny75()),
     'vischeck': simulate.Simulator_Vischeck(),
     'machado': simulate.Simulator_Machado2009(),
+    'coblisV1': simulate.Simulator_CoblisV1(),
+    'coblisV2': simulate.Simulator_CoblisV2(),
     'auto': simulate.Simulator_AutoSelect()
 }
 
@@ -51,7 +53,6 @@ def main():
     deficiency = deficiency_from_str[args.deficiency]
     simulator: simulate.Simulator = simulator_from_str[args.model]
     im = np.asarray(Image.open(args.input_image).convert('RGB'))
-
 
     if args.filter == 'simulate':
         out = simulator.simulate_cvd(im, deficiency=deficiency, severity=args.severity)

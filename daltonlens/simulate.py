@@ -24,6 +24,7 @@ class Simulator (ABC):
 
     def __init__(self):
         self.dumpPrecomputedValues = False
+        self.imageEncoding = convert.ImageEncoding.SRGB
 
     def simulate_cvd (self, image_srgb_uint8, deficiency: Deficiency, severity: float):
         """Simulate the appearance of an image for the given color vision deficiency
@@ -44,9 +45,21 @@ class Simulator (ABC):
         im : array of shape (M,N,3) with dtype uint8
             The simulated sRGB image with values in [0,255].
         """
-        im_linear_rgb = convert.linearRGB_from_sRGB(convert.as_float32(image_srgb_uint8))
+        im_linear_rgb = convert.as_float32(image_srgb_uint8)        
+        if (self.imageEncoding == convert.ImageEncoding.SRGB):
+            im_linear_rgb = convert.linearRGB_from_sRGB(im_linear_rgb)
+        elif (self.imageEncoding == convert.ImageEncoding.GAMMA_22):
+            im_linear_rgb = convert.linearRGB_from_gamma22(im_linear_rgb)
+
         im_cvd_linear_rgb = self._simulate_cvd_linear_rgb(im_linear_rgb, deficiency, severity)
-        return convert.as_uint8(convert.sRGB_from_linearRGB(im_cvd_linear_rgb))
+        
+        if (self.imageEncoding == convert.ImageEncoding.SRGB):
+            im_cvd_float = convert.sRGB_from_linearRGB(im_cvd_linear_rgb)
+        elif (self.imageEncoding == convert.ImageEncoding.GAMMA_22):
+            im_cvd_float = convert.gamma22_from_linearRGB(im_cvd_linear_rgb)
+        else:
+            im_cvd_float = im_cvd_linear_rgb
+        return convert.as_uint8(im_cvd_float)
 
     @abstractmethod
     def _simulate_cvd_linear_rgb (self, image_linear_rgb_float32, deficiency: Deficiency, severity: float):
@@ -366,7 +379,6 @@ machado_2009_matrices = {
         10: np.array([ [1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900] ])
     }
 }
-
 class Simulator_Machado2009 (Simulator):
     """The model proposed by (MacHado & Oliveira & Fernandes, 2009)
 
@@ -391,6 +403,145 @@ class Simulator_Machado2009 (Simulator):
         m = alpha*m2 + (1.0-alpha)*m1
 
         return convert.apply_color_matrix(image_linear_rgb_float32, m)
+
+coblis_v1_matrices = {
+    Deficiency.PROTAN: np.array([[0.567, 0.433, 0.000],
+                                 [0.558, 0.442, 0.000],
+                                 [0.000, 0.242, 0.758]]),
+
+    Deficiency.DEUTAN: np.array([[0.625, 0.375, 0.000],
+                                 [0.700, 0.300, 0.000],
+                                 [0.000, 0.300, 0.700]]),
+
+    Deficiency.TRITAN: np.array([[0.950,0.050,0.000],
+                                 [0.000, 0.433, 0.567],
+                                 [0.000, 0.475, 0.525]])
+}
+
+class Simulator_CoblisV1 (DichromacySimulator):
+    """The first version of Coblis, as implemented by
+    https://github.com/MaPePeR/jsColorblindSimulator
+    for
+    https://www.color-blindness.com/coblis-color-blindness-simulator/
+
+    This model is very inaccurate and should not be used, it is only
+    here for comparison purposes. You can read more about its history
+    and accuracy in https://daltonlens.org/opensource-cvd-simulation/
+    """
+
+    def __init__(self):
+        super().__init__()
+        # No sRGB nor gamma correction at all in CoblisV1.
+        self.imageEncoding = convert.ImageEncoding.LINEAR_RGB
+
+    def _simulate_dichromacy_linear_rgb (self, image_linear_rgb_float32, deficiency: Deficiency):
+        m = coblis_v1_matrices[deficiency]
+        return convert.apply_color_matrix(image_linear_rgb_float32, m)
+
+coblis_v2_constants = {
+    Deficiency.PROTAN: {'cpu': 0.735, 'cpv':  0.265, 'am': 1.273463, 'ayi': -0.073894},
+    Deficiency.DEUTAN: {'cpu': 1.140, 'cpv': -0.140, 'am': 0.968437, 'ayi':  0.003331},
+    Deficiency.TRITAN: {'cpu': 0.171, 'cpv': -0.003, 'am': 0.062921, 'ayi':  0.292119}
+}
+
+class Simulator_CoblisV2 (DichromacySimulator):
+    """The second version of Coblis, as implemented by
+    https://github.com/MaPePeR/jsColorblindSimulator
+    for
+    https://www.color-blindness.com/coblis-color-blindness-simulator/
+
+    This was adapted from the HCIRN Color Blind Simulation function.
+    
+    It is not recommended as it lacks a proper background to assess
+    its accuracy. You can read more about its history in 
+    https://daltonlens.org/opensource-cvd-simulation/
+    """
+
+    def __init__(self):
+        super().__init__()
+        # CoblisV2 uses old CRTs gamma correction.
+        self.imageEncoding = convert.ImageEncoding.GAMMA_22
+
+    def _simulate_dichromacy_linear_rgb (self, image_linear_rgb_float32, deficiency: Deficiency):
+        # Implementation adapted from https://github.com/jkulesza/peacock by
+        # moving it to numpy and restoring the original issue with large values.
+        # TODO: we're allocating way too many arrays.
+        # But kept it this way for clarity.
+        wx = 0.312713
+        wy = 0.329016
+        wz = 0.358271
+
+        cpu = coblis_v2_constants[deficiency]['cpu']
+        cpv = coblis_v2_constants[deficiency]['cpv']
+        am  = coblis_v2_constants[deficiency]['am']
+        ayi = coblis_v2_constants[deficiency]['ayi']
+
+        rgb2xyz = np.array([[0.430574, 0.341550, 0.178325],
+                            [0.222015, 0.706655, 0.071330],
+                            [0.020183, 0.129553, 0.939180]])
+        crgb = image_linear_rgb_float32
+        cxyz = convert.apply_color_matrix(crgb, rgb2xyz)
+        cx = cxyz[:,:,0]
+        cy = cxyz[:,:,1]
+        sum_xyz = np.sum(cxyz, axis=2)
+
+        with np.errstate(divide='ignore', invalid='ignore'):
+            cu = cx / sum_xyz
+            cv = cy / sum_xyz
+            np.nan_to_num(cu, copy=False)
+            np.nan_to_num(cv, copy=False)
+
+        nx = wx * cy / wy
+        nz = wz * cy / wy
+        
+        clm = (cpv - cv) / (cpu - cu)
+        # clm[cu >= cpu] *= -1.0
+
+        clyi = cv - np.multiply(cu, clm)
+        du = np.divide((ayi - clyi), (clm - am))
+        dv = np.multiply(clm, du) + clyi
+
+        sxyz = np.zeros_like(cxyz)
+        sx = sxyz[:,:,0] = np.divide(np.multiply(du, cy), dv)
+        sy = sxyz[:,:,1] = cy
+        sz = sxyz[:,:,2] = np.divide(np.multiply((1.0 - (du + dv)), cy), dv)
+        
+        xyz2rgb = np.array([[ 3.063218, -1.393325, -0.475802],
+                            [-0.969243,  1.875966,  0.041555],
+                            [ 0.067871, -0.228834,  1.069251]])
+        srgb = convert.apply_color_matrix(sxyz, xyz2rgb)
+
+        dxyz = np.zeros_like(sxyz)
+        dx = dxyz[:,:,0] = nx - sx
+        dy = dxyz[:,:,1] # = 0
+        dz = dxyz[:,:,2] = nz - sz
+
+        drgb = convert.apply_color_matrix(dxyz, xyz2rgb)
+        
+        # var adjr = dr ? ((sr < 0 ? 0 : 1) - sr) / dr : 0;
+        # var adjg = dg ? ((sg < 0 ? 0 : 1) - sg) / dg : 0;
+        # var adjb = db ? ((sb < 0 ? 0 : 1) - sb) / db : 0;
+
+        # var adjust = Math.max(
+        #     ((adjr > 1 || adjr < 0) ? 0 : adjr),
+        #     ((adjg > 1 || adjg < 0) ? 0 : adjg),
+        #     ((adjb > 1 || adjb < 0) ? 0 : adjb)
+        # );
+
+        adjrgb = np.zeros_like(drgb)
+        # Note: peacock fixed some issues with large values by doing drgb > 0.0 instead.
+        # It's unclear to me whether it can have drawbacks, but sticking to the original
+        # behavior for comparison purposes.
+        # var adjr = dr ? ((sr < 0 ? 0 : 1) - sr) / dr : 0;
+        with np.errstate(divide='ignore'):
+            adjrgb = np.divide((np.where(srgb < 0.0, 0.0, 1.0) - srgb), drgb)
+        np.nan_to_num(adjrgb, copy=False)
+
+        adjust = adjrgb
+        adjust[np.logical_or(adjrgb > 1.0, adjrgb < 0.0)] = 0.0
+        adjust = np.amax(adjust, 2) # becomes (M,N,1) here
+        srgb = srgb + np.multiply(drgb, adjust[..., np.newaxis])
+        return srgb
 
 class Simulator_AutoSelect (Simulator):
     """Automatically selects the best algorithm for the given deficiency and severity.

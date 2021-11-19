@@ -18,7 +18,7 @@ class TestCVD(unittest.TestCase):
         for simulator, deficiency, severity, gt_im in models_to_test:
             out = simulator.simulate_cvd(im, deficiency=deficiency, severity=severity)
             # Uncomment to generate a new ground truth.
-            # Image.fromarray(out).save(test_images_path / gt_im)
+            # Image.fromarray(out).save(test_images_path / ('generated_' + str(gt_im)))
             gt = np.asarray(Image.open(test_images_path / gt_im).convert('RGB'))
             self.assertTrue(np.allclose(out, gt, atol=tolerance))
 
@@ -84,6 +84,30 @@ class TestCVD(unittest.TestCase):
 
         im = generate.rgb_span(27*8, 27*8)
         self.checkModels (im, models_to_test)
+
+    def test_coblisV1(self):
+        coblisv1 = simulate.Simulator_CoblisV1()
+
+        models_to_test = [
+            (coblisv1, simulate.Deficiency.PROTAN, 1.0, "coblisv1_protan_1.0.png"),
+            (coblisv1, simulate.Deficiency.DEUTAN, 1.0, "coblisv1_deutan_1.0.png"),
+            (coblisv1, simulate.Deficiency.TRITAN, 1.0, "coblisv1_tritan_1.0.png"),
+        ]
+
+        im = generate.rgb_span(27*8, 27*8)
+        self.checkModels (im, models_to_test, tolerance=1)
+    
+    def test_coblisV2(self):
+        coblisv2 = simulate.Simulator_CoblisV2()
+
+        models_to_test = [
+            (coblisv2, simulate.Deficiency.PROTAN, 1.0, "coblisv2_protan_1.0.png"),
+            (coblisv2, simulate.Deficiency.DEUTAN, 1.0, "coblisv2_deutan_1.0.png"),
+            (coblisv2, simulate.Deficiency.TRITAN, 1.0, "coblisv2_tritan_1.0.png"),
+        ]
+
+        im = generate.rgb_span(27*8, 27*8)
+        self.checkModels (im, models_to_test, tolerance=1)
 
     def test_auto(self):
         im = generate.rgb_span(27, 27)

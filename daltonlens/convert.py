@@ -1,6 +1,13 @@
 import math
 import numpy as np
 
+from enum import Enum
+
+class ImageEncoding(Enum):
+    SRGB = 0
+    LINEAR_RGB = 1 # assume the image is already in linearRGB and don't apply any transform
+    GAMMA_22 = 2 # gamma of 2.2 (old CRTs, before the sRGB standard)
+
 def as_uint8(im):
     """Multiply by 255 and cast the float image to uint8"""
     return (np.clip(im,0.,1.0)*255.0).astype(np.uint8)
@@ -8,6 +15,14 @@ def as_uint8(im):
 def as_float32(im):
     """Divide by 255 and cast the uint8 image to float32"""
     return im.astype(np.float32)/255.0
+
+def linearRGB_from_gamma22(im):
+    """Gamma correction for old PCs/CRT monitors"""
+    return np.power(im, 2.2)
+
+def gamma22_from_linearRGB(im):
+    """Inverse gamma correction for old PCs/CRT monitors"""
+    return np.power(np.clip(im, 0., 1.), 1.0 / 2.2)
 
 def linearRGB_from_sRGB(im):
     """Convert sRGB to linearRGB, removing the gamma correction.
