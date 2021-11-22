@@ -518,21 +518,10 @@ class Simulator_CoblisV2 (DichromacySimulator):
 
         drgb = convert.apply_color_matrix(dxyz, xyz2rgb)
         
-        # var adjr = dr ? ((sr < 0 ? 0 : 1) - sr) / dr : 0;
-        # var adjg = dg ? ((sg < 0 ? 0 : 1) - sg) / dg : 0;
-        # var adjb = db ? ((sb < 0 ? 0 : 1) - sb) / db : 0;
-
-        # var adjust = Math.max(
-        #     ((adjr > 1 || adjr < 0) ? 0 : adjr),
-        #     ((adjg > 1 || adjg < 0) ? 0 : adjg),
-        #     ((adjb > 1 || adjb < 0) ? 0 : adjb)
-        # );
-
         adjrgb = np.zeros_like(drgb)
         # Note: peacock fixed some issues with large values by doing drgb > 0.0 instead.
         # It's unclear to me whether it can have drawbacks, but sticking to the original
-        # behavior for comparison purposes.
-        # var adjr = dr ? ((sr < 0 ? 0 : 1) - sr) / dr : 0;
+        # behavior that only avoids exact zero for comparison purposes.
         with np.errstate(divide='ignore'):
             adjrgb = np.divide((np.where(srgb < 0.0, 0.0, 1.0) - srgb), drgb)
         np.nan_to_num(adjrgb, copy=False)
