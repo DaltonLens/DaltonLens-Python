@@ -45,6 +45,20 @@ def rgb_span(width, height):
             im[r_fullRes,c_fullRes,:] = (steps[r_idx], steps[g_idx], steps[b_idx])
     return im
 
+def randomized_rgb_span(width, height):
+    perfect_grid = rgb_span(27,27)
+    coordinates = list(itertools.product(range(0,27), range(0,27)))
+    random.shuffle(coordinates)
+    im = np.zeros((height,width,3), dtype=np.uint8)
+    for r_fullRes in range(0, height):
+        for c_fullRes in range(0, width):
+            r = (27 * r_fullRes) // height
+            c = (27 * c_fullRes) // width
+            idx = r*27+c
+            coords = coordinates[idx]
+            im[r_fullRes,c_fullRes,:] = perfect_grid[coords[0], coords[1]]
+    return im
+
 def ishihara_image(fg_color, bg_color, mask):
     """Generate an Ishihara-like image of small circles
 
