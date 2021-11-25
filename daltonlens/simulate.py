@@ -1,5 +1,5 @@
 from daltonlens import convert
-from daltonlens.utils import array_to_C_decl
+from daltonlens.utils import array_to_C_decl, normalized
 
 from collections import namedtuple
 
@@ -317,6 +317,20 @@ static struct DLBrettel1997Params brettel_{deficiency_name}_params = {{
     {{ {H2_row[0]:.5f}, {H2_row[1]:.5f}, {H2_row[2]:.5f} }}, // Projection to plane 2
     {{ {n_sep_plane[0]:.5f}, {n_sep_plane[1]:.5f}, {n_sep_plane[2]:.5f} }}  // Normal of the separation plane to pick the projection plane.
 }};""")
+
+        self.rgbCvd_from_rgb_1 = self.color_model.linearRGB_from_LMS @ H1 @ self.color_model.LMS_from_linearRGB
+        self.rgbCvd_from_rgb_2 = self.color_model.linearRGB_from_LMS @ H2 @ self.color_model.LMS_from_linearRGB
+
+        print()
+        print(array_to_C_decl(f"brettel_{deficiency_name}_rgbCvd_from_rgb_1", self.rgbCvd_from_rgb_1))
+        print()
+        print(array_to_C_decl(f"brettel_{deficiency_name}_rgbCvd_from_rgb_2", self.rgbCvd_from_rgb_2))
+        print()
+
+        self.dotSepInRgb = np.dot(n_sep_plane, self.color_model.LMS_from_linearRGB)
+        self.dotSepInRgb = normalized(self.dotSepInRgb) * 10.0
+        print(array_to_C_decl(f"brettel_{deficiency_name}_dotSepPlaneInRgb", self.dotSepInRgb))
+        print()
 
 class Simulator_Vischeck (Simulator_Brettel1997):
     """Emulates Vischeck, as implemented in GIMP.
