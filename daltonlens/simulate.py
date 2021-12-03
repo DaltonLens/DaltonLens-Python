@@ -146,7 +146,7 @@ class Simulator_Vienot1999 (DichromacySimulator):
         self.color_model = color_model
 
     def _simulate_dichromacy_linear_rgb (self, image_linear_rgb_float32, deficiency: Deficiency):
-        lms_projection_matrix = None
+        self.lms_projection_matrix = None
         if deficiency == Deficiency.PROTAN or deficiency == Deficiency.DEUTAN:
             lms_blue = self.color_model.LMS_from_linearRGB @ np.array([0.0, 0.0, 1.0])
             lms_yellow = self.color_model.LMS_from_linearRGB @ np.array([1.0, 1.0, 0.0])
@@ -155,16 +155,16 @@ class Simulator_Vienot1999 (DichromacySimulator):
 
             # Deutan and Protan plane normal
             n = np.cross(v_yellow, v_blue)
-            lms_projection_matrix = plane_projection_matrix(n, deficiency)
+            self.lms_projection_matrix = plane_projection_matrix(n, deficiency)
         else:
             # print ("WARNING: Viénot 1999 is not accurate for tritanopia. Use Brettel 1997 instead.")
             v_red = self.color_model.LMS_from_linearRGB @ np.array([1.0, 0.0, 0.0]) # - lms_black which is ommitted since it's zero
             v_cyan = self.color_model.LMS_from_linearRGB @ np.array([0.0, 1.0, 1.0]) # - lms_black which is ommitted since it's zero
             n = np.cross(v_cyan, v_red)
-            lms_projection_matrix = plane_projection_matrix(n, Deficiency.TRITAN)
+            self.lms_projection_matrix = plane_projection_matrix(n, Deficiency.TRITAN)
 
         # Save it for external inspection.
-        self.cvd_linear_rgb = self.color_model.linearRGB_from_LMS @ lms_projection_matrix @ self.color_model.LMS_from_linearRGB
+        self.cvd_linear_rgb = self.color_model.linearRGB_from_LMS @ self.lms_projection_matrix @ self.color_model.LMS_from_linearRGB
 
         if self.dumpPrecomputedValues:
             print (array_to_C_decl(f"vienot_{name_of_deficiency(deficiency)}_rgbCvd_from_rgb", self.cvd_linear_rgb))
@@ -311,6 +311,11 @@ struct DLBrettel1997Params
     float separationPlaneNormalInRgb[3];
 };""")
 
+        # Save it in case someone wants it.
+        self.n_sep_plane = n_sep_plane
+        self.H1 = H1
+        self.H2 = H2
+        
         self.n_sep_plane_rgb = np.dot(n_sep_plane, self.color_model.LMS_from_linearRGB)
         # rgbCvdFromRgb 1 and 2
         self.T1 = self.color_model.linearRGB_from_LMS @ H1 @ self.color_model.LMS_from_linearRGB
