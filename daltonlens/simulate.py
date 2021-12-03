@@ -289,48 +289,40 @@ class Simulator_Brettel1997 (DichromacySimulator):
 
     def _dump_brettel_data(self, deficiency, H1, H2, n_sep_plane):
         deficiency_name = name_of_deficiency(deficiency)
-        print(array_to_C_decl("LMS_from_linearRGB", self.color_model.LMS_from_linearRGB))
-        print()
-        print(array_to_C_decl("linearRGB_from_LMS", self.color_model.linearRGB_from_LMS))
+
         print ("""
 struct DLBrettel1997Params
 {
-    int lmsElementToProject;
-    float projectionOnPlane1[3];
-    float projectionOnPlane2[3];
-    float separationPlaneNormal[3];
+    // Transformation using plane 1 == rgbFromLms . projection1 . lmsFromRgb
+    float rgbCvdFromRgb_1[9];
+    
+    // Full transformation using plane 2 == rgbFromLms . projection2 . lmsFromRgb
+    float rgbCvdFromRgb_2[9];
+
+    // Normal of the separation plane to pick the right transform, already in the RGB space.
+    // == normalInLms . lmsFromRgb
+    float separationPlaneNormalInRgb[3];
 };""")
-            
-        lmsElementForDeficiency = {
-            Deficiency.PROTAN: 0,
-            Deficiency.DEUTAN: 1,
-            Deficiency.TRITAN: 2,
-        }
-        lmsElementToProject = lmsElementForDeficiency[deficiency]
-        H1_row = H1[lmsElementToProject]
-        H2_row = H2[lmsElementToProject]
+
+        self.n_sep_plane_rgb = np.dot(n_sep_plane, self.color_model.LMS_from_linearRGB)
+        # rgbCvdFromRgb 1 and 2
+        self.T1 = self.color_model.linearRGB_from_LMS @ H1 @ self.color_model.LMS_from_linearRGB
+        self.T2 = self.color_model.linearRGB_from_LMS @ H2 @ self.color_model.LMS_from_linearRGB
 
         print (f"""
 static struct DLBrettel1997Params brettel_{deficiency_name}_params = {{
-    {lmsElementToProject}, // only this LMS coordinate is affected for {deficiency_name}
-    {{ {H1_row[0]:.5f}, {H1_row[1]:.5f}, {H1_row[2]:.5f} }}, // Projection to plane 1
-    {{ {H2_row[0]:.5f}, {H2_row[1]:.5f}, {H2_row[2]:.5f} }}, // Projection to plane 2
-    {{ {n_sep_plane[0]:.5f}, {n_sep_plane[1]:.5f}, {n_sep_plane[2]:.5f} }}  // Normal of the separation plane to pick the projection plane.
+    {{
+        {self.T1[0,0]:.5f}, {self.T1[0,1]:.5f}, {self.T1[0,2]:.5f},
+        {self.T1[1,0]:.5f}, {self.T1[1,1]:.5f}, {self.T1[1,2]:.5f},
+        {self.T1[2,0]:.5f}, {self.T1[2,1]:.5f}, {self.T1[2,2]:.5f},
+    }},
+    {{
+        {self.T2[0,0]:.5f}, {self.T2[0,1]:.5f}, {self.T2[0,2]:.5f},
+        {self.T2[1,0]:.5f}, {self.T2[1,1]:.5f}, {self.T2[1,2]:.5f},
+        {self.T2[2,0]:.5f}, {self.T2[2,1]:.5f}, {self.T2[2,2]:.5f},
+    }},
+    {{ {self.n_sep_plane_rgb[0]:.5f}, {self.n_sep_plane_rgb[1]:.5f}, {self.n_sep_plane_rgb[2]:.5f} }}
 }};""")
-
-        self.rgbCvd_from_rgb_1 = self.color_model.linearRGB_from_LMS @ H1 @ self.color_model.LMS_from_linearRGB
-        self.rgbCvd_from_rgb_2 = self.color_model.linearRGB_from_LMS @ H2 @ self.color_model.LMS_from_linearRGB
-
-        print()
-        print(array_to_C_decl(f"brettel_{deficiency_name}_rgbCvd_from_rgb_1", self.rgbCvd_from_rgb_1))
-        print()
-        print(array_to_C_decl(f"brettel_{deficiency_name}_rgbCvd_from_rgb_2", self.rgbCvd_from_rgb_2))
-        print()
-
-        self.dotSepInRgb = np.dot(n_sep_plane, self.color_model.LMS_from_linearRGB)
-        self.dotSepInRgb = normalized(self.dotSepInRgb) * 10.0
-        print(array_to_C_decl(f"brettel_{deficiency_name}_dotSepPlaneInRgb", self.dotSepInRgb))
-        print()
 
 class Simulator_Vischeck (Simulator_Brettel1997):
     """Emulates Vischeck, as implemented in GIMP.
