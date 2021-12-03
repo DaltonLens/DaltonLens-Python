@@ -227,17 +227,24 @@ class Simulator_Brettel1997 (DichromacySimulator):
             xyz_660 = np.array([ 0.90089,  0.21688, -0.04599])
         else:
             # This is how these were computed. Saving the values to avoid a dependency.
-            # import colour # from pip install colour-science
-            # from colour import MSDS_CMFS
-            # cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
-            # xyz_475 = colour.wavelength_to_XYZ(475, cmfs)
-            # xyz_575 = colour.wavelength_to_XYZ(575, cmfs)
-            # xyz_485 = colour.wavelength_to_XYZ(485, cmfs)
-            # xyz_660 = colour.wavelength_to_XYZ(660, cmfs)
-            xyz_475 = np.array([ 0.1421,  0.1126,  1.0419])
-            xyz_575 = np.array([ 0.8425,  0.9154,  0.0018])
-            xyz_485 = np.array([ 0.05795, 0.1693,  0.6162])
-            xyz_660 = np.array([ 0.1649,  0.0610,  0.0000])
+            # pip install colour-science
+            # from daltonlens import cmfs
+            # xyz_475 = cmfs.wavelength_to_XYZ_JuddVos(475)
+            # xyz_575 = cmfs.wavelength_to_XYZ_JuddVos(575)
+            # xyz_485 = cmfs.wavelength_to_XYZ_JuddVos(485)
+            if self.color_model.usesJuddVosXYZ:
+                # xyz_660 = cmfs.wavelength_to_XYZ_JuddVos(660)
+                xyz_475 = np.array([0.13287, 0.11284, 0.9422 ])
+                xyz_575 = np.array([0.84394, 0.91558, 0.00197])
+                xyz_485 = np.array([0.05699, 0.16987, 0.5864 ])
+                xyz_660 = np.array([0.16161, 0.061  , 0.00001])
+            else:
+                # Values ignoring the Judd-Vos transform, for
+                # historical comparisons
+                xyz_475 = np.array([ 0.1421,  0.1126,  1.0419])
+                xyz_575 = np.array([ 0.8425,  0.9154,  0.0018])
+                xyz_485 = np.array([ 0.05795, 0.1693,  0.6162])
+                xyz_660 = np.array([ 0.1649,  0.0610,  0.0000])
 
         # The equal-energy white point. By construction of CIE XYZ it has X=Y=Z.
         # The normalization does not matter to define the diagonal direction,

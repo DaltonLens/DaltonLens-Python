@@ -20,10 +20,12 @@ class TestCVD(unittest.TestCase):
             # Uncomment to generate a new ground truth.
             # Image.fromarray(out).save(test_images_path / ('generated_' + str(gt_im)))
             gt = np.asarray(Image.open(test_images_path / gt_im).convert('RGB'))
-            self.assertTrue(np.allclose(out, gt, atol=tolerance))
+            if not np.allclose(out, gt, atol=tolerance):        
+                maxDelta = np.max(np.abs(out.astype(float)-gt))
+                self.fail(f"The images are different, max delta = {maxDelta}")
 
     def test_vienot1999(self):
-        vienot1999 = simulate.Simulator_Vienot1999(convert.LMSModel_sRGB_SmithPokorny75())
+        vienot1999 = simulate.Simulator_Vienot1999(convert.LMSModel_sRGB_SmithPokorny75(ignoreJuddVosCorrection=False))
 
         models_to_test = [
             (vienot1999, simulate.Deficiency.PROTAN, 1.0, "vienot1999_protan_1.0.png"),
@@ -36,10 +38,10 @@ class TestCVD(unittest.TestCase):
         ]
 
         im = generate.rgb_span(27*8, 27*8)
-        self.checkModels (im, models_to_test)
+        self.checkModels (im, models_to_test, 2)
     
     def test_brettel1997(self):
-        brettel1997 = simulate.Simulator_Brettel1997(convert.LMSModel_sRGB_SmithPokorny75())
+        brettel1997 = simulate.Simulator_Brettel1997(convert.LMSModel_sRGB_SmithPokorny75(ignoreJuddVosCorrection=False))
 
         # wn means use_white_as_neutral = true
         models_to_test = [
