@@ -96,6 +96,28 @@ def sRGB_from_linearRGB(im):
     out[large_mask] = np.power(im[large_mask], 1.0 / 2.4) * 1.055 - 0.055
     return out
 
+def Lab_from_XYZ(im_xyz):
+    """Convert XYZ to CIE L*a*b
+
+    XYZ assumed to be normalized so that the white point has Y=1.
+
+    For an input coming from the sRGB gamut, the output ranges are:
+        - [0,100] for L
+        - [-128,127] for a and b.
+
+    https://en.wikipedia.org/wiki/CIELAB_color_space#Converting_between_CIELAB_and_CIEXYZ_coordinates
+    """
+
+    im_xyz = np.divide(im_xyz, np.array([0.95047, 1.0, 1.08883]))
+    im_xyz_small_values = (7.787 * im_xyz + (16.0 / 116.0))
+    im_xyz_large_values = np.cbrt(im_xyz)
+    xyz = np.where(im_xyz > 0.008856, im_xyz_large_values, im_xyz_small_values)
+    im_lab = np.zeros_like(im_xyz)
+    im_lab[...,0] = (xyz[...,1] * 116.0) - 16.0
+    im_lab[...,1] = 500.0 * (xyz[...,0] - xyz[...,1])
+    im_lab[...,2] = 200.0 * (xyz[...,1] - xyz[...,2])
+    return im_lab
+
 def apply_color_matrix(im, m):
     """Transform a color array with the given 3x3 matrix.
 
